@@ -1,15 +1,19 @@
-import java.io.FileNotFoundException
 import java.util.TimerTask
 import java.util.concurrent.{Executors, TimeUnit}
-import java.io.IOException
 
 object CurrencyBalanceCalculatorApp extends App {
 
-    val ccyBalanceCalc = new CurrencyBalanceCalculator()
+    val ccyBalanceCalc = CurrencyBalanceCalculator
 
     class PublishTask extends TimerTask {
       @Override def run() = {
-        ccyBalanceCalc.ccyBalances.filter(_.amount != 0).map(b => println(b.ccy ++ " " ++ b.amount.toString))
+        ccyBalanceCalc.ccyBalances.filter(_.amount != 0)
+          .map(b => {
+            val defaultOutput = b.ccy.key.toUpperCase() ++ " " ++ b.amount.toString
+            b.ccy match {
+            case Currency("USD") => println(defaultOutput)
+            case _               => println(defaultOutput ++ " (USD " ++ s"${BigDecimal(ccyBalanceCalc.exchangeRates(b.ccy) * b.amount).setScale(2)})")
+          }})
       }
     }
 
@@ -17,14 +21,14 @@ object CurrencyBalanceCalculatorApp extends App {
     executor.scheduleAtFixedRate(new PublishTask, 0, 60, TimeUnit.SECONDS)
     if (args.length == 0) {
       while (true) {
-        val userInput = scala.io.StdIn.readLine()
+        val userInput = scala.io.StdIn.readLine().toUpperCase()
         if (userInput.equals("quit")) {
           System.exit(0)
           executor.shutdown()
         }
         else if (ccyBalanceCalc.processInput(userInput).isDefined) {
             ccyBalanceCalc.processInput(userInput) match {
-            case Some((ccy, amount)) => ccyBalanceCalc.executeTransactions(ccy, amount)
+            case Some((ccy, amount)) => ccyBalanceCalc.executeTransactions(Currency(ccy), amount)
             case None => println("Invalid Input")
           }
         }
@@ -36,16 +40,12 @@ object CurrencyBalanceCalculatorApp extends App {
       try {
         for (line <- fileReader.getLines) {
             ccyBalanceCalc.processInput(line) match {
-              case Some((ccy, amount)) => ccyBalanceCalc.executeTransactions(ccy, amount)
+              case Some((ccy, amount)) => ccyBalanceCalc.executeTransactions(Currency(ccy), amount)
               case None => println("Invalid Input")
             }
           }
       }
-      catch {
-         case e: FileNotFoundException => println("Couldn't find that file.")
-         case e: IOException           => println("Got an IOException!")
-         }
       finally fileReader.close()
-      }
-  }
+    }
+}
 
